@@ -1,3 +1,4 @@
+use redis::AsyncCommands;
 use redis::Client;
 use dotenv::dotenv;
 use futures_util::StreamExt;
@@ -8,36 +9,50 @@ use tokio::task;
 
 #[tokio::main]
 async fn main() -> redis::RedisResult<()> {
-    // Load environment variables
     dotenv().ok();
     let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
     let channel_name = env::var("CHANNEL_NAME").expect("CHANNEL_NAME must be set");
 
-    // Connect to Redis and subscribe to the channel
     let client = Client::open(redis_url)?;
     let mut pubsub = client.get_async_pubsub().await?;
     pubsub.subscribe(&channel_name).await?;
 
     println!("Subscribed to the channel: {}", channel_name);
 
-    // Message handling loop
     while let Some(msg) = pubsub.on_message().next().await {
         let payload: String = msg.get_payload()?;
         println!("Received: {}", payload);
 
-        // Spawn a new task for each publication
+        let client_clone = client.clone();
+        let channel_name_clone = channel_name.clone();
+
         task::spawn(async move {
-            handle_message(payload).await
+            if let Err(err) = handle_message(payload, client_clone, channel_name_clone).await {
+                eprintln!("Error handling message: {}", err);
+            }
         });
     }
 
     Ok(())
 }
 
-async fn handle_message(payload: String) -> std::io::Result<()> {
-    log_to_file(format!("PROCESSING MESSAGE: {}", payload))?;
+#[allow(deprecated, dependency_on_unit_never_type_fallback)]
+async fn handle_message(
+    payload: String,
+    client: Client,
+    channel_name: String,
+) -> Result<(), redis::RedisError> {
+    log_to_file(format!("PROCESSING MESSAGE: {}", payload))
+        .map_err(|e| redis::RedisError::from(e))?;
 
-    // TODO:: publish a message saying "Hi stranger" to the same channel
+
+    // TODO: call the business logic that must be in another file (use the main enty point in this file and show me how to inject the code here)
+
+    let mut con = client.get_async_connection().await?;
+    let response_message = "Hi stranger";
+
+    con.publish(channel_name, response_message).await?;
+    println!("Published: {}", response_message);
 
     Ok(())
 }
