@@ -1,0 +1,10 @@
+[package]
+name = "rust-redis-pubsub-microservice-bp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+redis = { version = "0.28.1", features = ["aio", "tokio-comp"] }
+dotenv = "0.15"
+futures-util = "0.3"
